@@ -291,7 +291,7 @@ Resources:
       RepositoryName:
         !Join
           - "-"
-          - - dmitri
+          - - dummy
             - !Ref pBranchName
       # RepositoryPolicyText: Json
       # Tags: 
@@ -320,7 +320,7 @@ Resources:
       ContainerDefinitions:
         # - Image: 861507897222.dkr.ecr.eu-north-1.amazonaws.com/dmitri-dashboard
         # - Image: !GetAtt ECR.RepositoryUri
-        - Image: 861507897222.dkr.ecr.eu-north-1.amazonaws.com/dmitri-clean
+        - Image: 861507897222.dkr.ecr.eu-north-1.amazonaws.com/dummy-clean
           Name: dmitri-task-definition-cf
           PortMappings: 
             - AppProtocol: http
