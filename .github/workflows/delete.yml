@@ -19,5 +19,5 @@ jobs:
           aws-region: eu-north-1
 
       - name: Delete the stack referred by the branch name
-        run: aws cloudformation delete-stack --stack-name "dmitriECS-${{ github.event.ref }}"
+        run: aws cloudformation delete-stack --stack-name "dummyECS-${{ github.event.ref }}"
 
