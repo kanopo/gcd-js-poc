@@ -1,8 +1,4 @@
 Description: "Load balancer template"
-# TODO:
-#   - aggiungere il selettore delle repo git nel template
-#   - aggiungere la creazione di ogni role e policy
-
 Parameters:
   pNumberFargateInstances:
     Description: Number of fargate instances
@@ -31,38 +27,36 @@ Parameters:
     Type: String
     Default: dummy.dmitri.sandbox.soluzionifutura.it
 
+  pRepoOwner:
+    Description: Repo Owner
+    Type: String
+    Default: kanopo
+  pRepoName:
+    Description: Repo Name
+    Type: String
+    Default: gcd-js-poc
   pBranchName:
     Description: source branch
     Type: String
     Default: main
 
 
+  pBaseECR:
+    Description: ECR URL
+    Type: String
+    Default: 861507897222.dkr.ecr.eu-north-1.amazonaws.com
+
+  pRepoECR:
+    Description: ECR repo
+    Type: String
+    Default: dmitri-node-clean
+  
+
 Conditions:
   dnsName: !Equals
     - !Ref pBranchName
     - "main"
 Resources:
-  # DBCredentials:
-  #   Type: AWS::SecretsManager::Secret
-  #   Properties: 
-  #     Description: Auto generated password for DB
-  #     GenerateSecretString: 
-  #       GenerateStringKey: "password"
-  #       SecretStringTemplate: !Sub '{"username": "${pDatabaseUser}"}'
-  #       PasswordLength: 30
-  #       ExcludeCharacters: '"@/\'
-  #
-  # DBSubnetGroup:
-  #   Type: AWS::RDS::DBSubnetGroup
-  #   Properties:
-  #     DBSubnetGroupDescription: subnet group for rds
-  #     SubnetIds:
-  #       - Fn::ImportValue: !Sub dmitri-private-subnet-01
-  #       - Fn::ImportValue: !Sub dmitri-private-subnet-02
-
-
-
-
   KMSKey:
     Type: AWS::KMS::Key
     Properties: 
@@ -146,23 +140,6 @@ Resources:
       KeyUsage: ENCRYPT_DECRYPT 
 
 
-  # MyDB:
-  #   Type: AWS::RDS::DBInstance
-  #   Properties:
-  #     StorageType: gp3
-  #     AllocatedStorage: 20
-  #     DBInstanceClass: db.t3.small
-  #     Engine: MySQL
-  #     MasterUsername: !Sub '{{resolve:secretsmanager:${DBCredentials}:SecretString:username}}' 
-  #     MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBCredentials}:SecretString:password}}'  
-  #     NetworkType: ipv4
-  #     DBSubnetGroupName: !Ref DBSubnetGroup
-  #     VPCSecurityGroups:
-  #       - Fn::ImportValue: !Sub dmitri-sg-db
-  #     KmsKeyId: !GetAtt KMSKey.Arn
-  #     StorageEncrypted: true
-
-
   SGLoadBalancer:
     Type: AWS::EC2::SecurityGroup
     Properties: 
@@ -220,19 +197,14 @@ Resources:
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref HTTPSCertificate
-
+  
   HTTPSCertificate:
     Type: AWS::CertificateManager::Certificate
     Properties: 
-      DomainName: 
-        !If 
-          - dnsName
-          - !Ref pDNSName
-          - !Join
-            - "."
-            - - !Ref pBranchName
-              - !Ref pDNSName
-
+      DomainName: !If
+        - dnsName
+        - !Ref pDNSName
+        - !Join [".", [!Ref pBranchName, !Ref pDNSName]]
       ValidationMethod: DNS
 
 
@@ -240,15 +212,10 @@ Resources:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId : !Ref pHostedZoneId
-      Name: 
-        !If 
-          - dnsName
-          - !Ref pDNSName
-          - !Join
-            - "."
-            - - !Ref pBranchName
-              - !Ref pDNSName
-
+      Name: !If
+        - dnsName
+        - !Ref pDNSName
+        - !Join [".", [!Ref pBranchName, !Ref pDNSName]]
       ResourceRecords:
       - !GetAtt ALB.DNSName
       TTL: 900
@@ -279,23 +246,12 @@ Resources:
 
   ECR:
     Type: AWS::ECR::Repository
-    # DeletionPolicy: Retain
     Properties: 
-      # EncryptionConfiguration: 
-      #   EncryptionConfiguration
-      # ImageScanningConfiguration: 
-      #   ImageScanningConfiguration
-      # ImageTagMutability: String
-      # LifecyclePolicy: 
-      #   LifecyclePolicy
       RepositoryName:
         !Join
           - "-"
-          - - dummy
+          - - !Ref pRepoName
             - !Ref pBranchName
-      # RepositoryPolicyText: Json
-      # Tags: 
-      #   - Tag
 
 
   CleanECR:
@@ -318,19 +274,16 @@ Resources:
         CpuArchitecture: X86_64
         OperatingSystemFamily: LINUX
       ContainerDefinitions:
-        # - Image: 861507897222.dkr.ecr.eu-north-1.amazonaws.com/dmitri-dashboard
-        # - Image: !GetAtt ECR.RepositoryUri
-        - Image: 861507897222.dkr.ecr.eu-north-1.amazonaws.com/dummy-clean
+        - Image: !Join
+          - "/"
+          - - !Ref pBaseECR
+            - !Ref pRepoECR
           Name: dmitri-task-definition-cf
-          PortMappings: 
+          PortMappings:
             - AppProtocol: http
               ContainerPort: 3000
               HostPort: 3000
               Protocol: tcp
-            # - AppProtocol: http
-            #   ContainerPort: 3306
-            #   HostPort: 3306
-            #   Protocol: http
             - AppProtocol: http
               ContainerPort: 22
               HostPort: 22
@@ -338,24 +291,8 @@ Resources:
           Environment:
             - Name: PORT
               Value: 3000
-            # - Name: DB_DATABASE
-            #   Value: node_app
-            # - Name: DB_HOST
-            #   Value: !GetAtt MyDB.Endpoint.Address
-            # - Name: DB_PASSWORD
-            #   Value: !Sub '{{resolve:secretsmanager:${DBCredentials}:SecretString:password}}' 
-            # - Name: DB_PORT
-            #   Value: 3306
-            # - Name: DB_USER
-            #   Value: !Sub '{{resolve:secretsmanager:${DBCredentials}:SecretString:username}}' 
-            # - Name: BUCKET_NAME
-            #   Value: !Ref ImageStoreBucket
             - Name: BUCKET_REGION
               Value: !Ref AWS::Region
-            # - Name: GITHUB_CLIENT_ID
-            #   Value: !Sub '{{resolve:secretsmanager:dmitri-GITHUB-Oauth-secrets:SecretString:GITHUB_CLIENT_ID}}' 
-            # - Name: GITHUB_CLIENT_SECRET
-            #   Value: !Sub '{{resolve:secretsmanager:dmitri-GITHUB-Oauth-secrets:SecretString:GITHUB_CLIENT_SECRET}}' 
 
           LogConfiguration:
             LogDriver: awslogs
@@ -401,16 +338,6 @@ Resources:
               KMSMasterKeyID: !GetAtt KMSKey.Arn
               SSEAlgorithm: aws:kms
 
-  # ImageStoreBucket:
-  #   Type: "AWS::S3::Bucket"
-  #   Properties:
-  #     BucketEncryption:
-  #       ServerSideEncryptionConfiguration:
-  #         - BucketKeyEnabled: true
-  #           ServerSideEncryptionByDefault:
-  #             KMSMasterKeyID: !GetAtt KMSKey.Arn
-  #             SSEAlgorithm: aws:kms
-
   CleanArtifactBucket:
     Type: Custom::cleanBucket
     Properties: 
@@ -418,13 +345,6 @@ Resources:
       BucketName: !Ref ArtifactStoreBucket
       Region: !Ref AWS::Region
 
-
-  # CleanImageBucket:
-  #   Type: Custom::cleanBucket
-  #   Properties: 
-  #     ServiceToken: !GetAtt LFCleanBucket.Arn
-  #     BucketName: !Ref ImageStoreBucket
-  #     Region: !Ref AWS::Region
 
   LFCleanBucket:
     Type: AWS::Lambda::Function
@@ -623,7 +543,10 @@ Resources:
               RunOrder: 1
               Configuration: 
                 ConnectionArn: arn:aws:codestar-connections:eu-north-1:861507897222:connection/3539e571-f68d-4976-924d-214a46cd5fcd
-                FullRepositoryId: kanopo/gcd-js-poc
+                FullRepositoryId: !Join
+                  - "/"
+                  - - !Ref pRepoOwner 
+                    - !Ref pRepoName
                 BranchName: !Ref pBranchName
               Name: SourceAction
               OutputArtifacts:
@@ -641,7 +564,6 @@ Resources:
               Configuration: 
                 ProjectName: dmitri-build-node-docker
                 PrimarySource: SourceArtifact
-                # !Sub '{{resolve:secretsmanager:dmitri-GITHUB-Oauth-secrets:SecretString:GITHUB_CLIENT_SECRET}}'
               Name: BuildAction
               OutputArtifacts:
                 - Name: BuildArtifact
@@ -661,19 +583,3 @@ Resources:
                 FileName: images.json
               Name: DeployAction
 
-
-Outputs:
-  LoadBalancerDns:
-    Description: EndPoint URI
-    Value: 
-        !If 
-          - dnsName
-          - !Ref pDNSName
-          - !Join
-            - "."
-            - - !Ref pBranchName
-              - !Ref pDNSName
-
-  # MysqlUrl:
-  #   Description: Mysql URI
-  #   Value: !GetAtt MyDB.Endpoint.Address 
