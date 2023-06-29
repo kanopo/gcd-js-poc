@@ -381,4 +381,3 @@ Outputs:
     Value: !Ref SGDB
     Export:
       Name: dmitri-sg-db
-

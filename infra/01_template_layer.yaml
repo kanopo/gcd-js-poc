@@ -25,7 +25,7 @@ Parameters:
   pDNSName:
     Description: DNS name
     Type: String
-    Default: dummy.dmitri.sandbox.soluzionifutura.it
+    Default: dmitri.sandbox.soluzionifutura.it
 
   pRepoOwner:
     Description: Repo Owner
@@ -34,7 +34,7 @@ Parameters:
   pRepoName:
     Description: Repo Name
     Type: String
-    Default: gcd-js-poc
+    Default: gcd
   pBranchName:
     Description: source branch
     Type: String
@@ -244,22 +244,22 @@ Resources:
     DependsOn: ALB
 
 
-  ECR:
-    Type: AWS::ECR::Repository
-    Properties: 
-      RepositoryName:
-        !Join
-          - "-"
-          - - !Ref pRepoName
-            - !Ref pBranchName
+  # ECR:
+  #   Type: AWS::ECR::Repository
+  #   Properties: 
+  #     RepositoryName:
+  #       !Join
+  #         - "-"
+  #         - - !Ref pRepoName
+  #           - !Ref pBranchName
 
 
-  CleanECR:
-    Type: Custom::cleanECR
-    Properties: 
-      ServiceToken: !GetAtt LFCleanECR.Arn
-      ECRName: !Ref ECR
-      Region: !Ref AWS::Region
+  # CleanECR:
+  #   Type: Custom::cleanECR
+  #   Properties: 
+  #     ServiceToken: !GetAtt LFCleanECR.Arn
+  #     ECRName: !Ref ECR
+  #     Region: !Ref AWS::Region
 
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -430,99 +430,230 @@ Resources:
       Role: arn:aws:iam::861507897222:role/dmitriLambdaRoleDeleteS3Object 
       Timeout: 60
 
-  LFCleanECR:
-      Type: AWS::Lambda::Function
-      Properties:
-        Runtime: nodejs18.x
-        Handler: index.handler
-        Code:
-          ZipFile: |
-            const response = require("cfn-response")
-            const { ECRClient, BatchDeleteImageCommand, ListImagesCommand } = require("@aws-sdk/client-ecr")
+  # LFCleanECR:
+  #     Type: AWS::Lambda::Function
+  #     Properties:
+  #       Runtime: nodejs18.x
+  #       Handler: index.handler
+  #       Code:
+  #         ZipFile: |
+  #           const response = require("cfn-response")
+  #           const { ECRClient, BatchDeleteImageCommand, ListImagesCommand } = require("@aws-sdk/client-ecr")
+  #
+  #           const send = (event, context, responseStatus, responseData, physicalResourceId) => {
+  #             return new Promise((resolve) => {
+  #               const done = context.done
+  #               context.done = (event, context, responseStatus, responseData, physicalResourceId) => {
+  #                 resolve(done(event, context, responseStatus, responseData, physicalResourceId))
+  #               }
+  #               response.send(event, context, responseStatus, responseData, physicalResourceId)
+  #             })
+  #           }
+  #           const getImages = async (client, repositoryName) => {
+  #
+  #             const imagesResponce = await client.send(new ListImagesCommand({
+  #               repositoryName: repositoryName
+  #             }))
+  #
+  #             if (imagesResponce.imageIds.length == 0) {
+  #               return []
+  #             }
+  #             else {
+  #               return imagesResponce.imageIds
+  #             }
+  #           }
+  #
+  #
+  #           const deleteImages = async (client, repositoryName, imageIds) => {
+  #             const deleteResponce = await client.send(new BatchDeleteImageCommand({
+  #               repositoryName: repositoryName,
+  #               imageIds: imageIds
+  #             }))
+  #
+  #             return deleteResponce.metadata
+  #           }
+  #
+  #
+  #           exports.handler = async (event, context) => {
+  #             setTimeout(async (event, context) => {
+  #               console.log("TIMEOUT")
+  #               return await send(event, context, "FAILED", {
+  #                 body: "Lambda timeouted"
+  #               })
+  #             }, 1000 * 60) // the value is in milliseconds
+  #
+  #             if (event.RequestType == "Delete") {
+  #               const ecrName = event.ResourceProperties.ECRName;
+  #               const region = event.ResourceProperties.Region;
+  #
+  #
+  #               const client = new ECRClient({ region: region })
+  #               const imageIds = await getImages(client, ecrName)
+  #
+  #               if (imageIds.length == 0) {
+  #                 return await send(event, context, response.SUCCESS, {
+  #                   body: "Nothing to delete"
+  #                 })
+  #               }
+  #               else {
+  #                 const deleteRes = await deleteImages(client, ecrName, imageIds)
+  #                 if (deleteRes.statusCode != 200) {
+  #                   return await send(event, context, response.FAILED, {
+  #                     body: "Deletion failed"
+  #                   })
+  #                 } else {
+  #                   return await send(event, context, response.SUCCESS, {
+  #                     body: "Deletion completed"
+  #                   })
+  #                 }
+  #               }
+  #             } else if (event.RequestType == "Update") {
+  #               return await send(event, context, response.SUCCESS, {
+  #                 body: "Update completed"
+  #               })
+  #             } else if (event.RequestType == "Create") {
+  #               return await send(event, context, response.SUCCESS, {
+  #                 body: "Create completed"
+  #               })
+  #             }
+  #           }
+  #
+  #
+  #       KmsKeyArn: !GetAtt KMSKey.Arn
+  #       # WARN: need to created the following role inside the template
+  #       Role: arn:aws:iam::861507897222:role/dmitriECRRoleDeleteImages 
+  #       Timeout: 60
 
-            const send = (event, context, responseStatus, responseData, physicalResourceId) => {
-              return new Promise((resolve) => {
-                const done = context.done
-                context.done = (event, context, responseStatus, responseData, physicalResourceId) => {
-                  resolve(done(event, context, responseStatus, responseData, physicalResourceId))
-                }
-                response.send(event, context, responseStatus, responseData, physicalResourceId)
-              })
-            }
-            const getImages = async (client, repositoryName) => {
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties: 
+      Artifacts: 
+        # ArtifactIdentifier: String
+        # EncryptionDisabled: Boolean
+        # Location: String
+        # Name: String
+        # NamespaceType: String
+        # OverrideArtifactName: Boolean
+        # Packaging: String
+        # Path: String
+        Type: CODEPIPELINE
 
-              const imagesResponce = await client.send(new ListImagesCommand({
-                repositoryName: repositoryName
-              }))
+      # BadgeEnabled: Boolean
+      # BuildBatchConfig: 
+      #   ProjectBuildBatchConfig
+      # Cache: 
+      #   ProjectCache
+      # ConcurrentBuildLimit: Integer
+      # Description: String
+      # EncryptionKey: String
+      Environment: 
+        # Certificate: String
+        ComputeType: BUILD_GENERAL1_SMALL
+        # EnvironmentVariables: 
+        #   - EnvironmentVariable
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0-23.02.16
+        # ImagePullCredentialsType: String
+        PrivilegedMode: true
+        # RegistryCredential: 
+        #   RegistryCredential
+        Type: LINUX_CONTAINER
+      # FileSystemLocations: 
+      #   - ProjectFileSystemLocation
+      # LogsConfig: 
+      #   LogsConfig
+      # Name: String
+      # QueuedTimeoutInMinutes: Integer
+      # ResourceAccessRole: String
+      # SecondaryArtifacts: 
+      #   - Artifacts
+      # SecondarySources: 
+      #   - Source
+      # SecondarySourceVersions: 
+      #   - ProjectSourceVersion
+      ServiceRole: arn:aws:iam::861507897222:role/codeBuildServiceRole
+      Source: 
+        # Auth: 
+        #   SourceAuth
+        BuildSpec: !Sub |
+          version: 0.2
+          env:
+            secrets-manager:
+              GITHUB_TOKEN: "dmitri-GITHUB-Oauth-secrets:GITHUB_TOKEN"
+              GITHUB_COMMIT_EMAIL: "dmitri-GITHUB-Oauth-secrets:GITHUB_COMMIT_EMAIL"
+              GITHUB_COMMIT_NAME: "dmitri-GITHUB-Oauth-secrets:GITHUB_COMMIT_NAME"
+              NEXTAUTH_SECRET: "dmitri-GITHUB-Oauth-secrets:NEXTAUTH_SECRET"
+              PASSWORD: "dmitri-GITHUB-Oauth-secrets:PASSWORD"
 
-              if (imagesResponce.imageIds.length == 0) {
-                return []
-              }
-              else {
-                return imagesResponce.imageIds
-              }
-            }
+            variables:
+              PATH_TO_CODE: "./code/"
+              ECR_REPO: "${pRepoName}-${pBranchName}"
+              ECR: 861507897222.dkr.ecr.eu-north-1.amazonaws.com
+              AWS_REGION: "eu-north-1"
+              GIT_REPO: ${pRepoName}
+              GIT_BRANCH: ${pBranchName}
+              DNS_NAME: ${pDNSName}
+
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR...
+                - aws --version
+                - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR
+                - REPOSITORY_URI=$ECR/$ECR_REPO
+
+            build:
+              commands:
+                - echo "GITHUB_TOKEN="$GITHUB_TOKEN >> $PATH_TO_CODE.env
+                - echo "GITHUB_COMMIT_EMAIL="$GITHUB_COMMIT_EMAIL >> $PATH_TO_CODE.env
+                - echo "GITHUB_COMMIT_NAME="$GITHUB_COMMIT_NAME >> $PATH_TO_CODE.env
+                - echo "NEXTAUTH_SECRET="$NEXTAUTH_SECRET >> $PATH_TO_CODE.env
+                - echo "PASSWORD="$PASSWORD >> $PATH_TO_CODE.env
+
+                - if [ "$GIT_BRANCH" = "main" ]; then echo "NEXT_PUBLIC_SITE_URL="$DNS_NAME >> $PATH_TO_CODE.env; fi
+                - if [ "$GIT_BRANCH" = "main" ]; then echo "NEXTAUTH_URL="$DNS_NAME >> $PATH_TO_CODE.env; fi
+                - if [ "$GIT_BRANCH" != "main" ]; then echo "NEXT_PUBLIC_SITE_URL="$GIT_BRANCH.$DNS_NAME >> $PATH_TO_CODE.env; fi
+                - if [ "$GIT_BRANCH" != "main" ]; then echo "NEXTAUTH_URL="$GIT_BRANCH.$DNS_NAME >> $PATH_TO_CODE.env; fi
 
 
-            const deleteImages = async (client, repositoryName, imageIds) => {
-              const deleteResponce = await client.send(new BatchDeleteImageCommand({
-                repositoryName: repositoryName,
-                imageIds: imageIds
-              }))
-
-              return deleteResponce.metadata
-            }
+                - cat $PATH_TO_CODE.env
 
 
-            exports.handler = async (event, context) => {
-              setTimeout(async (event, context) => {
-                console.log("TIMEOUT")
-                return await send(event, context, "FAILED", {
-                  body: "Lambda timeouted"
-                })
-              }, 1000 * 60) // the value is in milliseconds
-
-              if (event.RequestType == "Delete") {
-                const ecrName = event.ResourceProperties.ECRName;
-                const region = event.ResourceProperties.Region;
-
-
-                const client = new ECRClient({ region: region })
-                const imageIds = await getImages(client, ecrName)
-
-                if (imageIds.length == 0) {
-                  return await send(event, context, response.SUCCESS, {
-                    body: "Nothing to delete"
-                  })
-                }
-                else {
-                  const deleteRes = await deleteImages(client, ecrName, imageIds)
-                  if (deleteRes.statusCode != 200) {
-                    return await send(event, context, response.FAILED, {
-                      body: "Deletion failed"
-                    })
-                  } else {
-                    return await send(event, context, response.SUCCESS, {
-                      body: "Deletion completed"
-                    })
-                  }
-                }
-              } else if (event.RequestType == "Update") {
-                return await send(event, context, response.SUCCESS, {
-                  body: "Update completed"
-                })
-              } else if (event.RequestType == "Create") {
-                return await send(event, context, response.SUCCESS, {
-                  body: "Create completed"
-                })
-              }
-            }
+                - echo Build started on `date`
+                - echo Building the Docker image...
+                - docker build -t $ECR_REPO $PATH_TO_CODE
+                - docker tag $ECR_REPO:latest $REPOSITORY_URI:latest
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo Pushing the Docker images...
+                - docker push $REPOSITORY_URI:latest
+                - echo Writing image definitions file...
+                - printf '[{"name":"dmitri-task-definition-cf","imageUri":"%s"}]' $REPOSITORY_URI:latest> images.json
+          artifacts:
+            files: images.json
 
 
-        KmsKeyArn: !GetAtt KMSKey.Arn
-        # WARN: need to created the following role inside the template
-        Role: arn:aws:iam::861507897222:role/dmitriECRRoleDeleteImages 
-        Timeout: 60
+
+
+        # BuildStatusConfig: 
+        #   BuildStatusConfig
+        # GitCloneDepth: Integer
+        # GitSubmodulesConfig: 
+        #   GitSubmodulesConfig
+        # InsecureSsl: Boolean
+        # Location: String
+        # ReportBuildStatus: Boolean
+        # SourceIdentifier: String
+        Type: CODEPIPELINE
+      # SourceVersion: String
+      # Tags: 
+      #   - Tag
+      # TimeoutInMinutes: Integer
+      # Triggers: 
+      #   ProjectTriggers
+      # Visibility: String
+      # VpcConfig: 
+      #   VpcConfig
 
 
   CodePipeLine:
@@ -562,11 +693,13 @@ Resources:
                 Version: 1
               RunOrder: 2
               Configuration: 
-                ProjectName: dmitri-build-node-docker
-                PrimarySource: SourceArtifact
+                ProjectName: !Ref CodeBuildProject
+                # ProjectName: dmitri-build-node-docker
+                # PrimarySource: SourceArtifact
               Name: BuildAction
               OutputArtifacts:
                 - Name: BuildArtifact
+                
         - Name: Deploy
           Actions: 
             - InputArtifacts:
@@ -582,4 +715,3 @@ Resources:
                 ServiceName: !Ref ECSService
                 FileName: images.json
               Name: DeployAction
-
